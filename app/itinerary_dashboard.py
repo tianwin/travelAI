@@ -2,30 +2,127 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-def render_itinerary_dashboard(itinerary_data):
-    st.header("Your Travel Itinerary")
+def render_itinerary_dashboard(itinerary):
+    """Render the itinerary dashboard with day selection and activity details."""
+    # Initialize session state for selected day if not exists
+    if 'selected_day' not in st.session_state:
+        st.session_state.selected_day = 1
     
-    # Display trip summary
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Destination", itinerary_data["destination"])
-    with col2:
-        st.metric("Duration", f"{itinerary_data['duration']} days")
-    with col3:
-        st.metric("Budget", f"${itinerary_data['budget']}")
+    # Create day selection dropdown
+    days = [f"Day {day['day_number']}" for day in itinerary['days']]
+    selected_day_index = st.session_state.selected_day - 1
     
-    # Create tabs for different views
-    tab1, tab2, tab3 = st.tabs(["Day-by-Day", "Map View", "Budget Breakdown"])
+    # Update selected day if dropdown changes
+    new_selection = st.selectbox(
+        "Select Day",
+        options=days,
+        index=selected_day_index,
+        key="day_selector"
+    )
     
-    with tab1:
-        render_day_by_day_view(itinerary_data)
+    # Update session state with new selection
+    st.session_state.selected_day = int(new_selection.split()[-1])
     
-    with tab2:
-        st.write("Map view coming soon...")
-        # TODO: Implement map visualization
+    # Get the selected day's activities
+    selected_day = next(day for day in itinerary['days'] if day['day_number'] == st.session_state.selected_day)
     
-    with tab3:
-        render_budget_breakdown(itinerary_data)
+    # Display day summary
+    st.subheader(f"Day {st.session_state.selected_day}")
+    
+    # Create a DataFrame for the selected day's activities
+    activities_data = []
+    for activity in selected_day['activities']:
+        activities_data.append({
+            'Time': activity['time'],
+            'Activity': activity['title'],
+            'Duration': activity['duration'],
+            'Cost': f"${activity['cost']}",
+            'Location': activity['location'],
+            'Transportation': activity['transportation']
+        })
+    
+    df = pd.DataFrame(activities_data)
+    
+    # Display activities in a table
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Time": st.column_config.TextColumn(
+                "Time",
+                width="small",
+            ),
+            "Activity": st.column_config.TextColumn(
+                "Activity",
+                width="medium",
+            ),
+            "Duration": st.column_config.TextColumn(
+                "Duration",
+                width="small",
+            ),
+            "Cost": st.column_config.TextColumn(
+                "Cost",
+                width="small",
+            ),
+            "Location": st.column_config.TextColumn(
+                "Location",
+                width="medium",
+            ),
+            "Transportation": st.column_config.TextColumn(
+                "Transportation",
+                width="medium",
+            ),
+        }
+    )
+    
+    # Display detailed descriptions for each activity
+    st.subheader("Activity Details")
+    for activity in selected_day['activities']:
+        with st.expander(f"{activity['time']} - {activity['title']}"):
+            # Create columns for better layout
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                # Render markdown in the description with proper spacing
+                st.markdown(activity['description'])
+                st.markdown("---")
+            
+            with col2:
+                # Display additional details in a structured format
+                st.markdown("**Quick Info:**")
+                st.markdown(f"📍 **Location:**\n`{activity['location']}`")
+                st.markdown(f"🚗 **Transportation:**\n{activity['transportation']}")
+                st.markdown(f"⏱️ **Duration:**\n{activity['duration']}")
+                st.markdown(f"💰 **Cost:**\n${activity['cost']}")
+    
+    # Display trip summary with better formatting
+    with st.expander("Trip Summary"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Trip Details:**")
+            st.markdown(f"🌍 **Destination:**\n{itinerary['destination'].title()}")
+            st.markdown(f"📅 **Duration:**\n{itinerary['duration']} days")
+            st.markdown(f"💵 **Budget:**\n${itinerary['budget']}")
+        
+        with col2:
+            st.markdown("**Preferences:**")
+            st.markdown(f"🎯 **Travel Style:**\n{itinerary['travel_style']}")
+            st.markdown(f"❤️ **Interests:**\n{', '.join(itinerary['interests'])}")
+        
+        # Calculate and display costs
+        total_cost = sum(
+            activity['cost']
+            for day in itinerary['days']
+            for activity in day['activities']
+        )
+        remaining_budget = itinerary['budget'] - total_cost
+        
+        st.markdown("---")
+        st.markdown("**Budget Summary:**")
+        st.markdown(f"💰 **Total Estimated Cost:**\n${total_cost}")
+        st.markdown(f"💵 **Remaining Budget:**\n${remaining_budget}")
 
 def render_day_by_day_view(itinerary_data):
     for day_data in itinerary_data.get("days", []):
