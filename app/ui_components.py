@@ -1,5 +1,13 @@
 import streamlit as st
 from datetime import datetime, timedelta
+from agents.itinerary_agent import ItineraryAgent
+import yaml
+import os
+
+def load_config():
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'config.yaml')
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
 
 def render_travel_form():
     with st.form("travel_planning_form"):
@@ -24,12 +32,27 @@ def render_travel_form():
         submitted = st.form_submit_button("Generate Itinerary")
         
         if submitted:
-            # TODO: Call itinerary generation logic
-            st.session_state.itinerary = {
-                "destination": destination,
-                "start_date": start_date,
-                "duration": duration,
-                "budget": budget,
-                "travel_style": travel_style,
-                "interests": interests
-            } 
+            try:
+                # Load configuration
+                config = load_config()
+                
+                # Initialize the agent
+                agent = ItineraryAgent(api_key=config['api_keys']['groq'])
+                
+                # Prepare preferences
+                preferences = {
+                    "destination": destination,
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "duration": duration,
+                    "budget": budget,
+                    "travel_style": travel_style,
+                    "interests": interests
+                }
+                
+                # Generate itinerary
+                with st.spinner("Generating your personalized itinerary..."):
+                    itinerary = agent.generate_itinerary(preferences)
+                    st.session_state.itinerary = itinerary
+            except Exception as e:
+                st.error(f"Failed to generate itinerary: {str(e)}")
+                st.session_state.itinerary = None 

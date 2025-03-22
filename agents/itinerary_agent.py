@@ -2,6 +2,7 @@ from typing import Dict, List
 import groq
 from datetime import datetime, timedelta
 import json
+import re
 
 class ItineraryAgent:
     def __init__(self, api_key: str):
@@ -67,9 +68,7 @@ class ItineraryAgent:
             print("\n🔍 Error details:")
             import traceback
             print(traceback.format_exc())
-            # Fallback to mock data if API call fails
-            print("\n⚠️ Falling back to mock data...")
-            return self._generate_mock_itinerary(preferences)
+            raise Exception("Failed to generate itinerary. Please try again or contact support if the issue persists.")
     
     def _construct_prompt(self, preferences: Dict) -> str:
         """Construct the prompt for the AI model."""
@@ -86,7 +85,7 @@ class ItineraryAgent:
         4. Time for meals and breaks
         5. Transportation considerations
         
-        Please provide the itinerary in the following JSON format:
+        IMPORTANT: Your response must be a valid JSON object with the following structure:
         {{
             "days": [
                 {{
@@ -105,23 +104,40 @@ class ItineraryAgent:
                 }}
             ]
         }}
+        
+        Do not include any text before or after the JSON object. The response must be a valid JSON that can be parsed directly.
         """
     
     def _parse_response_to_itinerary(self, response_text: str, preferences: Dict) -> Dict:
         """Parse the AI response into a structured itinerary."""
         try:
             print("\n🔍 Parsing response text...")
-            # Extract JSON from the response
-            import json
-            import re
+            print("Raw response text:")
+            print(response_text)
             
-            # Find JSON content in the response
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                print("✅ Found JSON content in response")
-                itinerary_data = json.loads(json_match.group())
-            else:
-                raise ValueError("No JSON found in response")
+            # Try to parse the entire response as JSON first
+            try:
+                itinerary_data = json.loads(response_text)
+                print("✅ Successfully parsed entire response as JSON")
+            except json.JSONDecodeError:
+                print("⚠️ Could not parse entire response as JSON, trying to extract JSON content...")
+                # Find JSON content in the response
+                json_match = re.search(r'\{[\s\S]*\}', response_text)
+                if json_match:
+                    print("✅ Found JSON content in response")
+                    itinerary_data = json.loads(json_match.group())
+                else:
+                    raise ValueError("No valid JSON found in response")
+            
+            # Validate the structure
+            if not isinstance(itinerary_data, dict):
+                raise ValueError("Response is not a dictionary")
+            
+            if "days" not in itinerary_data:
+                raise ValueError("Response missing 'days' key")
+            
+            if not isinstance(itinerary_data["days"], list):
+                raise ValueError("'days' is not a list")
             
             # Add metadata
             itinerary_data.update({
@@ -133,7 +149,8 @@ class ItineraryAgent:
                 "interests": preferences["interests"]
             })
             
-            print("✅ Successfully parsed and structured itinerary data")
+            print("\n✅ Successfully parsed and structured itinerary data:")
+            print(json.dumps(itinerary_data, indent=2))
             return itinerary_data
             
         except Exception as e:
@@ -141,45 +158,4 @@ class ItineraryAgent:
             print("\n🔍 Error details:")
             import traceback
             print(traceback.format_exc())
-            return self._generate_mock_itinerary(preferences)
-    
-    def _generate_mock_itinerary(self, preferences: Dict) -> Dict:
-        """Generate mock itinerary data for testing."""
-        print("\n⚠️ Generating mock itinerary data...")
-        itinerary = {
-            "destination": preferences["destination"],
-            "start_date": preferences["start_date"],
-            "duration": preferences["duration"],
-            "budget": preferences["budget"],
-            "travel_style": preferences["travel_style"],
-            "interests": preferences["interests"],
-            "days": []
-        }
-        
-        for day in range(1, preferences["duration"] + 1):
-            itinerary["days"].append({
-                "day_number": day,
-                "activities": [
-                    {
-                        "time": "09:00",
-                        "title": f"Activity {day}.1",
-                        "description": "Description coming soon...",
-                        "duration": "2 hours",
-                        "cost": 50,
-                        "location": "Location details coming soon...",
-                        "transportation": "Transportation details coming soon..."
-                    },
-                    {
-                        "time": "14:00",
-                        "title": f"Activity {day}.2",
-                        "description": "Description coming soon...",
-                        "duration": "3 hours",
-                        "cost": 75,
-                        "location": "Location details coming soon...",
-                        "transportation": "Transportation details coming soon..."
-                    }
-                ]
-            })
-        
-        print("✅ Mock itinerary generated")
-        return itinerary 
+            raise Exception("Failed to parse itinerary data. Please try again or contact support if the issue persists.") 
